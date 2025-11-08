@@ -4,19 +4,39 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SneakChat Messenger</title>
-    <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Load Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, where, addDoc, getDocs, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // Import arrayRemove and arrayUnion for future use, and getDoc, setDoc, etc.
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, where, addDoc, getDocs, updateDoc, deleteDoc, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // --- GLOBAL SETUP & AUTHENTICATION (MANDATORY) ---
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+
+        // ======================================================================
+        // !!! IMPORTANT: CONFIGURATION FOR EXTERNAL DEPLOYMENT (e.g., GitHub Pages) !!!
+        // If you are running this on a custom domain, you MUST replace these
+        // placeholder values with your own Firebase Project credentials.
+        // Get these from your Firebase Console > Project Settings.
+        // ======================================================================
+        const EXTERNAL_FIREBASE_CONFIG = {
+            apiKey: "YOUR_API_KEY_HERE", // <-- REPLACE THIS
+            authDomain: "YOUR_AUTH_DOMAIN_HERE", // <-- REPLACE THIS
+            projectId: "YOUR_PROJECT_ID_HERE", // <-- REPLACE THIS
+            storageBucket: "YOUR_STORAGE_BUCKET_HERE", // <-- REPLACE THIS
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID_HERE", // <-- REPLACE THIS
+            appId: "YOUR_WEB_APP_ID_HERE" // <-- REPLACE THIS
+        };
+        // Use a simple identifier for your app's data isolation (e.g., 'my-sneakchat-prod')
+        const EXTERNAL_APP_ID = "T3ST-DEPLOY"; 
+
+        // Configuration source prioritizer (Picks Canvas vars or your external config)
+        const appId = (typeof __app_id !== 'undefined' && __app_id) ? __app_id : EXTERNAL_APP_ID;
+        const firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config) 
+            ? JSON.parse(__firebase_config) 
+            : EXTERNAL_FIREBASE_CONFIG;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
         let db, auth, storage, userId = null;
@@ -54,6 +74,9 @@
         const getPrivateDocRef = (docName) => doc(db, 'artifacts', appId, 'users', userId, 'userData', docName);
         const getPrivateCollectionRef = (collectionName) => collection(db, 'artifacts', appId, 'users', userId, collectionName);
         
+        // Helper to get a specific user's private document
+        const getOtherUserPrivateDocRef = (otherUserId, docName) => doc(db, 'artifacts', appId, 'users', otherUserId, 'userData', docName);
+
         // App State
         const state = {
             view: 'messages',
@@ -184,449 +207,4 @@
                         <p class="text-gray-300 text-sm mb-1">Your SneakChat ID (Share this to add friends)</p>
                         <code class="text-xl font-mono text-sc-blue font-bold tracking-widest">${p.uniqueId}</code>
                         <button class="ml-2 text-gray-400 hover:text-white transition-colors" onclick="window.app.copyId()">
-                             <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-2m-2-4l-4-4m0 0L8 8m4 4v8"></path></svg>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="space-y-4">
-                    <input id="firstNameInput" type="text" placeholder="First Name" value="${p.firstName}" class="w-full p-3 rounded-lg bg-gray-800 text-white border border-sc-blue/50 focus:ring-sc-blue focus:border-sc-blue placeholder-gray-500">
-                    <input id="lastNameInput" type="text" placeholder="Surname" value="${p.lastName}" class="w-full p-3 rounded-lg bg-gray-800 text-white border border-sc-blue/50 focus:ring-sc-blue focus:border-sc-blue placeholder-gray-500">
-
-                    <!-- PROFILE PICTURE UPLOAD INPUT -->
-                    <label for="profileFile" class="block text-sm font-medium text-gray-400 pt-2">Upload Profile Picture (Max 1MB, JPEG/PNG/WEBP)</label>
-                    <div class="flex items-center space-x-3 bg-gray-800 p-3 rounded-lg border border-sc-blue/50">
-                        <input type="file" id="profileFile" accept="image/png, image/jpeg, image/webp" class="hidden" onchange="window.app.previewImage(event)">
-                        <button type="button" onclick="document.getElementById('profileFile').click()" class="flex-shrink-0 px-4 py-2 bg-sc-blue text-white text-sm font-medium rounded-lg hover:bg-sc-dark-blue transition-colors">
-                            Choose Image
-                        </button>
-                        <span id="fileNameDisplay" class="text-sm text-gray-500 truncate">No file selected.</span>
-                    </div>
-                    <!-- END NEW INPUT -->
-                    
-                    <button id="saveProfileBtn" class="w-full py-3 bg-sc-blue text-white font-bold rounded-lg hover:bg-sc-dark-blue transition-colors shadow-lg mt-4">
-                        Save Profile
-                    </button>
-                </div>
-            `;
-            $('saveProfileBtn').onclick = app.saveProfile;
-        };
-        
-        const renderNotificationsView = () => {
-            $('mainContent').innerHTML = `
-                <h2 class="text-2xl font-bold text-white mb-6 border-b border-sc-blue/30 pb-3">Friend Requests (${state.incomingRequests.length})</h2>
-            `;
-            
-            if (state.incomingRequests.length === 0) {
-                $('mainContent').innerHTML += `
-                    <div class="text-center text-gray-500 mt-16 p-4">
-                        <svg class="w-16 h-16 mx-auto text-sc-dark-blue mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 2 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
-                        <p class="text-lg font-semibold mb-2">No New Requests</p>
-                        <p>Keep your ID visible in your profile for others to add you!</p>
-                    </div>
-                `;
-            } else {
-                state.incomingRequests.forEach(req => {
-                    $('mainContent').innerHTML += `
-                        <div class="flex items-center p-3 mb-3 rounded-xl bg-gray-900/50 border border-sc-blue/20">
-                            <img src="${req.senderPic}" alt="Profile" class="w-12 h-12 rounded-full object-cover border-2 border-sc-blue">
-                            <div class="ml-3 flex-1">
-                                <p class="text-white font-semibold">${req.senderName}</p>
-                                <p class="text-gray-400 text-sm">Wants to be your friend.</p>
-                            </div>
-                            <button class="text-green-400 p-1 rounded-full hover:bg-gray-700 transition-colors mr-2" onclick="window.app.handleFriendRequest('${req.id}', 'accept', '${req.senderId}', '${req.senderName}', '${req.senderPic}', '${req.senderUniqueId}')">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                            </button>
-                            <button class="text-red-400 p-1 rounded-full hover:bg-gray-700 transition-colors" onclick="window.app.handleFriendRequest('${req.id}', 'decline')">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                            </button>
-                        </div>
-                    `;
-                });
-            }
-        };
-
-        const renderAddFriendView = () => {
-            $('mainContent').innerHTML = `
-                <h2 class="text-2xl font-bold text-white mb-6 border-b border-sc-blue/30 pb-3">Add Friend</h2>
-                
-                <div class="p-4 rounded-xl bg-gray-900/50 border border-sc-blue/50 space-y-4">
-                    <p class="text-gray-300">Enter your friend's 12-character SneakChat ID below to send a request.</p>
-                    <input id="friendIdInput" type="text" placeholder="Friend's SneakChat ID" maxlength="12" class="w-full p-3 rounded-lg bg-gray-800 text-white border border-sc-blue/50 focus:ring-sc-blue focus:border-sc-blue placeholder-gray-500 uppercase tracking-widest">
-                    <button id="sendRequestBtn" class="w-full py-3 bg-sc-blue text-white font-bold rounded-lg hover:bg-sc-dark-blue transition-colors shadow-lg">
-                        Send Friend Request
-                    </button>
-                </div>
-                
-                <div class="mt-8 text-center">
-                    <p class="text-gray-400">Your ID: <code class="text-sc-blue font-mono">${state.profile.uniqueId}</code></p>
-                    <p class="text-sm text-gray-500">Share this ID with others so they can add you.</p>
-                </div>
-            `;
-            $('sendRequestBtn').onclick = app.sendFriendRequest;
-        };
-
-        const previewImage = (event) => {
-            const file = event.target.files[0];
-            const fileNameDisplay = $('fileNameDisplay');
-            
-            if (file) {
-                if (file.size > 1024 * 1024) { // 1MB limit
-                    state.message = "Image size limit is 1MB. Please select a smaller file.";
-                    event.target.value = ''; // Clear file input
-                    fileNameDisplay.textContent = "File too large.";
-                } else {
-                    $('profileImage').src = URL.createObjectURL(file);
-                    fileNameDisplay.textContent = file.name;
-                }
-            } else {
-                // If user cancels file selection, revert the preview image
-                $('profileImage').src = state.profile.profilePicUrl;
-                fileNameDisplay.textContent = "No file selected.";
-            }
-            renderView();
-        };
-        
-        // --- FIREBASE LOGIC ---
-
-        const initializeAppAndAuth = async () => {
-            if (Object.keys(firebaseConfig).length === 0) {
-                state.message = "Firebase configuration is missing. Cannot save data.";
-                renderView();
-                return;
-            }
-            
-            setLogLevel('Debug');
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-            storage = getStorage(app);
-            
-            try {
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (error) {
-                console.error("Firebase Sign-In Failed:", error);
-                state.message = "Authentication failed. Please check console for details.";
-                renderView();
-                return;
-            }
-
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    userId = user.uid;
-                    isAuthReady = true;
-                    listenToData();
-                } else {
-                    userId = null;
-                    isAuthReady = false;
-                    state.message = "Authentication state lost. Please refresh.";
-                    renderView();
-                }
-            });
-        };
-
-        const listenToData = () => {
-            if (!isAuthReady || !userId) return;
-
-            // 1. Listen to Profile Data
-            onSnapshot(getPrivateDocRef('profile'), async (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    state.profile.firstName = data.firstName;
-                    state.profile.lastName = data.lastName;
-                    state.profile.profilePicUrl = data.profilePicUrl;
-                    state.profile.uniqueId = data.uniqueId;
-                } else {
-                    // Profile does not exist, initialize it (only if userId is set)
-                    if (userId) {
-                        await initializeUserProfile();
-                    }
-                }
-                renderView(); // Trigger render, which will show loading or the app
-            }, (error) => console.error("Profile Snapshot Error:", error));
-            
-            // 2. Listen to Friends List
-            onSnapshot(getPrivateDocRef('friends'), (docSnap) => {
-                state.friends = {};
-                if (docSnap.exists()) {
-                    state.friends = docSnap.data().friends || {};
-                }
-                renderView();
-            }, (error) => console.error("Friends Snapshot Error:", error));
-            
-            // 3. Listen to Incoming Requests
-            onSnapshot(getPrivateCollectionRef('requests'), (querySnapshot) => {
-                state.incomingRequests = [];
-                querySnapshot.forEach((doc) => {
-                    const data = doc.data();
-                    state.incomingRequests.push({ id: doc.id, ...data });
-                });
-                renderView();
-            }, (error) => console.error("Requests Snapshot Error:", error));
-        };
-        
-        const initializeUserProfile = async () => {
-            const newUniqueId = generateUniqueId();
-            const defaultProfile = {
-                firstName: 'Guest',
-                lastName: userId.substring(0, 8),
-                profilePicUrl: state.profile.profilePicUrl,
-                uniqueId: newUniqueId,
-            };
-            
-            // Create all necessary initial documents
-            await Promise.all([
-                setDoc(getPrivateDocRef('profile'), defaultProfile),
-                setDoc(doc(getPublicCollectionRef('uniqueIds'), newUniqueId), { userId: userId, uniqueId: newUniqueId }),
-                setDoc(getPrivateDocRef('friends'), { friends: {} })
-            ]).catch(e => console.error("Error during profile initialization:", e));
-
-            state.message = "Welcome! Set your real name and picture in the Profile tab.";
-            // The onSnapshot listener will catch these changes and call renderView
-        };
-
-        const saveProfile = async () => {
-            if (!isAuthReady) return;
-            
-            const firstName = sanitizeInput($('firstNameInput').value.trim());
-            const lastName = sanitizeInput($('lastNameInput').value.trim());
-            const profileFile = $('profileFile').files[0];
-            let newPicUrl = state.profile.profilePicUrl;
-
-            if (!firstName || !lastName) {
-                state.message = "First name and surname cannot be empty.";
-                renderView();
-                return;
-            }
-            if (firstName.length < 2 || lastName.length < 2) {
-                state.message = "Names must be at least 2 characters long.";
-                renderView();
-                return;
-            }
-
-            // Start loading state
-            const saveBtn = $('saveProfileBtn');
-            saveBtn.disabled = true;
-            saveBtn.textContent = 'Uploading...';
-
-            try {
-                // 1. HANDLE IMAGE UPLOAD
-                if (profileFile) {
-                    if (profileFile.size > 1024 * 1024) { 
-                         throw new Error("Image size limit is 1MB. Please select a smaller file.");
-                    }
-                    
-                    const storageRef = ref(storage, `profile_pics/${userId}/${Date.now()}_${profileFile.name}`);
-                    const uploadTask = await uploadBytes(storageRef, profileFile);
-                    newPicUrl = await getDownloadURL(uploadTask.ref);
-                }
-                
-                // Update button state to saving data
-                saveBtn.textContent = 'Saving Profile...';
-
-                // 2. UPDATE FIRESTORE PROFILE
-                const newProfileData = {
-                    ...state.profile,
-                    firstName: firstName,
-                    lastName: lastName,
-                    profilePicUrl: newPicUrl,
-                };
-
-                await updateDoc(getPrivateDocRef('profile'), newProfileData);
-                
-                state.message = profileFile ? "Profile and picture saved successfully!" : "Profile saved successfully!";
-
-            } catch (e) {
-                state.message = `Failed to save profile: ${e.message || 'An unknown error occurred.'}`;
-                console.error("Save Profile Error:", e);
-            } finally {
-                // Reset UI
-                saveBtn.disabled = false;
-                saveBtn.textContent = 'Save Profile';
-                $('profileFile').value = '';
-                $('fileNameDisplay').textContent = "No file selected.";
-                renderView();
-            }
-        };
-
-        const copyId = () => {
-            const id = state.profile.uniqueId;
-            const el = document.createElement('textarea');
-            el.value = id;
-            document.body.appendChild(el);
-            el.select();
-            document.execCommand('copy');
-            document.body.removeChild(el);
-            
-            state.message = `ID ${id} copied to clipboard!`;
-            renderView();
-        };
-
-        const sendFriendRequest = async () => {
-            if (!isAuthReady) return;
-
-            const targetId = $('friendIdInput').value.trim().toUpperCase();
-            if (targetId.length !== 12) {
-                state.message = "Please enter a valid 12-character SneakChat ID.";
-                renderView();
-                return;
-            }
-            if (targetId === state.profile.uniqueId) {
-                state.message = "You cannot add yourself!";
-                renderView();
-                return;
-            }
-
-            const idQuery = query(getPublicCollectionRef('uniqueIds'), where('uniqueId', '==', targetId));
-            const idSnapshot = await getDocs(idQuery);
-
-            if (idSnapshot.empty) {
-                state.message = `ID "${targetId}" not found. Double-check the code.`;
-                renderView();
-                return;
-            }
-
-            const receiverUid = idSnapshot.docs[0].data().userId;
-
-            if (state.friends[receiverUid]) {
-                state.message = `You are already friends with this user.`;
-                renderView();
-                return;
-            }
-
-            // Path to the receiver's private 'requests' collection
-            const receiverRequestsRef = getPrivateCollectionRef('requests').parent.parent.parent.parent.parent.parent.collection('users', receiverUid, 'requests');
-            
-            const requestData = {
-                senderId: userId,
-                senderName: `${state.profile.firstName} ${state.profile.lastName}`,
-                senderPic: state.profile.profilePicUrl,
-                senderUniqueId: state.profile.uniqueId,
-                status: 'pending',
-                timestamp: Date.now()
-            };
-
-            await addDoc(receiverRequestsRef, requestData)
-                .then(() => {
-                    state.message = "Friend request sent!";
-                    $('friendIdInput').value = '';
-                    renderView();
-                })
-                .catch(e => {
-                    state.message = "Failed to send request. Check console.";
-                    console.error("Send Request Error:", e);
-                    renderView();
-                });
-        };
-
-        const handleFriendRequest = async (requestId, action, senderUid, senderName, senderPic, senderUniqueId) => {
-            if (!isAuthReady) return;
-
-            // 1. Delete the request
-            await deleteDoc(doc(getPrivateCollectionRef('requests'), requestId))
-                .catch(e => console.error("Error deleting request:", e));
-                
-            if (action === 'accept') {
-                // 2. Add to both users' friend lists
-                const myFriendsRef = getPrivateDocRef('friends');
-                // Construct the path to the sender's private friends list
-                const senderFriendsRef = getPrivateCollectionRef('friends').parent.parent.parent.parent.parent.parent.doc('users', senderUid, 'userData', 'friends');
-
-                const myFriendData = { name: senderName, pic: senderPic, uniqueId: senderUniqueId };
-                const senderFriendData = { name: `${state.profile.firstName} ${state.profile.lastName}`, pic: state.profile.profilePicUrl, uniqueId: state.profile.uniqueId };
-                
-                await updateDoc(myFriendsRef, {
-                    [`friends.${senderUid}`]: myFriendData
-                }).catch(e => console.error("Error updating my friends list:", e));
-
-                // Use setDoc with merge to safely update sender's friends list
-                await setDoc(senderFriendsRef, {
-                    friends: {
-                        [userId]: senderFriendData
-                    }
-                }, { merge: true }).catch(e => console.error("Error updating sender's friends list:", e));
-
-                state.message = `You are now friends with ${senderName}!`;
-
-            } else {
-                state.message = "Friend request declined.";
-            }
-            
-            renderView();
-        };
-
-        // --- PUBLIC APP OBJECT ---
-        const app = {
-            setView: (view) => {
-                state.view = view;
-                renderView();
-            },
-            saveProfile,
-            copyId,
-            sendFriendRequest,
-            handleFriendRequest,
-            previewImage,
-        };
-        window.app = app;
-
-        // --- INITIALIZATION ---
-        window.onload = initializeAppAndAuth;
-
-    </script>
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #121212;
-            color: white;
-        }
-        /* Custom scrollbar for main content */
-        #mainContent::-webkit-scrollbar {
-            width: 4px;
-        }
-        #mainContent::-webkit-scrollbar-thumb {
-            background-color: #3b82f6;
-            border-radius: 2px;
-        }
-        #mainContent::-webkit-scrollbar-track {
-            background-color: #121212;
-        }
-        
-        .shadow-outline-blue {
-            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); /* sc-blue with transparency */
-        }
-    </style>
-</head>
-<body class="min-h-screen flex flex-col antialiased">
-
-    <!-- Header / Navigation Bar -->
-    <header class="bg-sc-black p-4 flex justify-between items-center border-b border-sc-blue/50 shadow-outline-blue sticky top-0 z-20">
-        <h1 class="text-2xl font-extrabold text-sc-blue tracking-wider">SneakChat</h1>
-        <div class="flex items-center space-x-4">
-            <!-- Add Friend Button -->
-            <button id="addFriendBtn" class="p-2 rounded-full text-white bg-sc-blue hover:bg-sc-dark-blue transition-colors">
-                <!-- Plus Icon -->
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-            </button>
-        </div>
-    </header>
-
-    <!-- Message/Error Display Area -->
-    <div id="messageDisplay" class="p-4 pt-2 pb-0">
-        <!-- Messages/Errors will appear here -->
-    </div>
-    
-    <!-- Main Content Area -->
-    <main id="mainContent" class="flex-1 overflow-y-auto"></main>
-
-    <!-- Footer / Bottom Navigation -->
-    <footer class="bg-sc-black border-t border-sc-blue/50 p-2">
-        <nav id="navBar" class="flex justify-around items-center"></nav>
-    </footer>
-
-</body>
-</html>
-
+                             <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.
